@@ -611,10 +611,20 @@ def make_deferred_yieldable(deferred):
         # immediately. We may as well optimise out the logcontext faffery.
         return deferred
 
-    # ok, we can't be sure that a yield won't block, so let's reset the
+    if LoggingContext.current_context() is LoggingContext.sentinel:
+        # We're already in the sentinel context, so there's nothing to do. If we
+        # did attempt to "restore" the log context then we could easily clobber
+        # another log context that had been saved during the generation of this
+        # deferred.
+        # This makes it safe to call `make_deferred_yieldable` on deferreds that
+        # already have set the log contexts.
+        return deferred
+
+    # Ok, we can't be sure that a yield won't block, so let's reset the
     # logcontext, and add a callback to the deferred to restore it.
-    prev_context = LoggingContext.set_current_context(LoggingContext.sentinel)
-    deferred.addBoth(_set_context_cb, prev_context)
+    if LoggingContext.current_context() is not LoggingContext.sentinel:
+        prev_context = LoggingContext.set_current_context(LoggingContext.sentinel)
+        deferred.addBoth(_set_context_cb, prev_context)
     return deferred
 
 

@@ -174,6 +174,29 @@ class LoggingContextTestCase(unittest.TestCase):
             self.assertEqual(r, "bum")
             self._check_test_key("one")
 
+    @defer.inlineCallbacks
+    def test_make_deferred_yieldable_reentrant(self):
+        """Test that `make_deferred_yieldable` does the right thing on deferreds
+        that already follow log context rules, i.e. wrapping a deferred with
+        `make_deferred_yieldable` multiple times.
+        """
+
+        sentinel_context = LoggingContext.current_context()
+
+        with LoggingContext() as context_one:
+            context_one.request = "one"
+
+            d1 = make_deferred_yieldable(_chained_deferred_function())
+            d2 = make_deferred_yieldable(d1)
+
+            # make sure that the context was reset by make_deferred_yieldable
+            self.assertIs(LoggingContext.current_context(), sentinel_context)
+
+            yield d2
+
+            # now it should be restored
+            self._check_test_key("one")
+
     def test_nested_logging_context(self):
         with LoggingContext(request="foo"):
             nested_context = nested_logging_context(suffix="bar")
