@@ -303,6 +303,7 @@ class Config(object):
         data_dir_path = os.getcwd()
 
         config_dict = read_config_files(config_files)
+        config_dict = cls.load_config_from_environment(config_dict)
         obj.parse_config_dict(
             config_dict, config_dir_path=config_dir_path, data_dir_path=data_dir_path
         )
@@ -310,6 +311,44 @@ class Config(object):
         obj.invoke_all("read_arguments", config_args)
 
         return obj, config_args
+
+    @classmethod
+    def load_config_from_environment(cls, config):
+        """Fetch configuration variable overrides from SYNAPSE_ environment
+        variables
+
+        Configuration tree can be traversed using __ infix, ie.
+        SYNAPSE_database__args__password will replace database.args.password
+        configuration variable.
+
+        Modifies input config argument in-place.
+
+        Args:
+            config(dict)
+
+        returns:
+            modified config object
+        """
+
+        config_prefix = 'SYNAPSE_'
+
+        for key, value in os.environ.items():
+            if not key.startswith(config_prefix):
+                continue
+
+            path = key[len(config_prefix):].split('__')
+
+            p = config
+            for part in path[:-1]:
+                if part in p:
+                    p = p[part]
+                else:
+                    p[part] = {}
+                    p = p[part]
+
+            p[path[-1]] = value
+
+        return config
 
     @classmethod
     def load_or_generate_config(cls, description, argv):
@@ -470,6 +509,7 @@ class Config(object):
         args = parser.parse_args(remaining_args)
 
         config_dict = read_config_files(config_files)
+        config_dict = cls.load_config_from_environment(config_dict)
         if generate_missing_configs:
             obj.generate_missing_files(config_dict, config_dir_path)
             return None
